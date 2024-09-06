@@ -1,0 +1,241 @@
+using System.Collections;
+using System.Collections.Generic;
+using UnityEngine;
+using UnityEngine.UI;
+using Newtonsoft.Json;
+using TMPro;
+using Nethereum.Web3;
+using Nethereum.Util;
+using Nethereum.Signer;
+using Nethereum.Hex.HexConvertors.Extensions;
+using Nethereum.ABI.Encoders;
+using Nethereum.Hex.HexTypes;
+using Nethereum.Web3.Accounts;
+using Nethereum.Web3.Accounts.Managed;
+using UnityEngine.SceneManagement;
+
+public class Web3AuthScript : MonoBehaviour
+{
+    Web3Auth web3Auth;
+    public TextMeshProUGUI console;
+    private string userEmail = "ajitesh.jam@gmail.com";
+    private string privateKey;
+    private string userInfo;
+    private Account account;
+    Web3 web3;
+    const string rpcURL = "https://rpc.ankr.com/multichain/37a1e410063b13f25438ca6df4dbf55b1bcc2008edbc9f95be8ef9f73d646a9f";
+
+    // Start is called before the first frame update
+    void Start()
+    {
+        // IMP START - Quick Start
+        web3Auth = GetComponent<Web3Auth>();
+        // IMP END - Quick Start
+
+        // IMP START - SDK Initialization
+        // IMP START - Dashboard Registration
+        var clientId = "BPSK0rnG_M_UCiJ1oR-KDAdNzsxqVvTfuLfD6LS7XSDfafepMjTVPc_Mcsc6SSQE4Veo44mD9ADCIvNpyPQBAHs"; // Get your Web3Auth Client ID on https://dashboard.web3auth.io
+        // IMP END - Dashboard Registration
+
+        web3Auth.setOptions(new Web3AuthOptions()
+        {
+            clientId = clientId,
+            redirectUrl = new System.Uri("w3aexample://com.web3auth.unityexample/auth"),
+            network = Web3Auth.Network.SAPPHIRE_DEVNET,
+
+        });
+        // IMP END - SDK Initialization
+        web3Auth.onLogin += onLogin;
+        web3Auth.onLogout += onLogout;
+
+        updateConsole("Ready to Login!");
+    }
+
+    public void GrabEmailFromInputField(string input)
+    {
+        userEmail = input;
+    }
+
+    //public void login()
+    //{
+    //    if (userEmail == "")
+    //    {
+    //        Debug.Log("Please enter your email.");
+    //        updateConsole("Please enter your email.");
+    //        return;
+    //    }
+    //    // IMP START - Login
+    //    var selectedProvider = Provider.EMAIL_PASSWORDLESS;
+
+    //    var options = new LoginParams()
+    //    {
+    //        loginProvider = selectedProvider,
+    //        extraLoginOptions = new ExtraLoginOptions()
+    //        {
+    //            login_hint = userEmail
+    //        }
+    //    };
+
+    //    web3Auth.login(options);
+    //    // IMP END - Login
+    //}
+    public void login()
+    {
+        var selectedProvider = Provider.GOOGLE;
+        var options = new LoginParams()
+        {
+            loginProvider = selectedProvider,
+          //  sessionTime = 86400,
+        };
+        web3Auth.login(options);
+    }
+    public void Menu()
+    {
+        SceneManager.LoadScene(0);
+    }
+    private void onLogin(Web3AuthResponse response)
+    {
+        // IMP START - Get User Information
+        userInfo = JsonConvert.SerializeObject(response.userInfo, Formatting.Indented);
+        // IMP END - Get User Information
+        // IMP START - Blockchain Calls
+        privateKey = response.privKey;
+        var newAccount = new Account(privateKey);
+        account = newAccount;
+
+        var rpc = new Nethereum.JsonRpc.Client.RpcClient(new System.Uri(rpcURL));
+        web3 = new Web3(account, rpc);
+        // IMP END - Blockchain Calls
+
+        Debug.Log("OnLogin response : \n"+JsonConvert.SerializeObject(response, Formatting.Indented));
+        updateConsole(JsonConvert.SerializeObject(response, Formatting.Indented));
+    }
+
+    public void getUserInfo()
+    {
+        if (account == null)
+        {
+            Debug.Log("Please Login First");
+            updateConsole("Please Login First");
+            return;
+        }
+        Debug.Log(userInfo);
+        updateConsole(userInfo);
+    }
+
+    public void logout()
+    {
+        // IMP START - Logout
+        web3Auth.logout();
+        // IMP END - Logout
+    }
+
+    private void onLogout()
+    {
+        privateKey = null;
+        userInfo = null;
+        account = null;
+
+        Debug.Log("Logged out!");
+        updateConsole("Logged out!");
+    }
+
+    // IMP START - Blockchain Calls
+    public void getAccount()
+    {
+        if (account == null)
+        {
+            Debug.Log("Please Login First");
+            updateConsole("Please Login First");
+            return;
+        }
+        Debug.Log(account.Address);
+        updateConsole(account.Address);
+    }
+
+    public void getBalance()
+    {
+        if (account == null)
+        {
+            Debug.Log("Please Login First");
+            updateConsole("Please Login First");
+            return;
+        }
+        var balance = web3.Eth.GetBalance.SendRequestAsync(account.Address).Result.Value;
+
+        Debug.Log(balance);
+        updateConsole(balance.ToString());
+    }
+
+    public void signMessage()
+    {
+        if (account == null)
+        {
+            Debug.Log("Please Login First");
+            updateConsole("Please Login First");
+            return;
+        }
+        var msg = "wee test message 18/09/2017 02:55PM";
+        var signer = new EthereumMessageSigner();
+        var signature = signer.EncodeUTF8AndSign(msg, new EthECKey(privateKey));
+
+        Debug.Log(signature);
+        updateConsole(signature.ToString());
+    }
+    // IMP END - Blockchain Calls
+
+    public void updateConsole(string message)
+    {
+        console.text = message;
+    }
+
+    // IMP START - Enable MFA
+
+    public void enableMFA()
+    {
+        var selectedProvider = Provider.JWT;
+
+        var options = new LoginParams()
+        {
+            loginProvider = selectedProvider,
+            //extraLoginOptions = new ExtraLoginOptions()
+            //{
+            //    //domain = "https://web3auth.au.auth0.com",
+            //    //verifierIdField = "sub",
+            //    //prompt = Prompt.LOGIN,
+            //}
+        };
+
+        web3Auth.enableMFA(options);
+    }
+
+    // IMP END - Enable MFA
+
+    private void onMFASetup(bool response)
+    {
+        Debug.Log("MFA Setup: " + response);
+    }
+
+    // IMP START - Launch Wallet Services
+
+    public void launchWalletServices()
+    {
+        var chainConfig = new ChainConfig()
+        {
+            chainId = "0x1",
+            rpcTarget = rpcURL,
+            ticker = "ETH",
+            chainNamespace = Web3Auth.ChainNamespace.EIP155
+        };
+        web3Auth.launchWalletServices(chainConfig);
+    }
+
+    // IMP END - Launch Wallet Services
+
+
+    // Update is called once per frame
+    void Update()
+    {
+
+    }
+}
